@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "allowSyntheticDefaultImports": true,
+        "types": [
+            "vite/client"
+        ]
+    },
+    "include": [
+        "**/*.ts",
+        "**/*.d.ts"
+    ]
+}
