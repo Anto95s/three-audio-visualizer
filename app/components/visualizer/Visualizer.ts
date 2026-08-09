@@ -1,232 +1,293 @@
 import "./style/style.css";
 import * as THREE from "three";
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { tracklist } from "../../utils/tracks";
+
+// unlit shader: base texture + a holographic rainbow sweep and a moving sun-flare streak
+const holoVertexShader = `
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+
+  void main() {
+    vUv = uv;
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewPosition = -mvPosition.xyz;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const holoFragmentShader = `
+  uniform sampler2D map;
+  uniform float uTime;
+  uniform float uBass;
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+
+  void main() {
+    vec4 texColor = texture2D(map, vUv);
+
+    vec3 viewDir = normalize(vViewPosition);
+    float fresnel = pow(1.0 - abs(dot(viewDir, normalize(vNormal))), 2.0);
+
+    // faint diagonal rainbow sheen, like light shifting across a laminated card
+    float diag = vUv.x + vUv.y + uTime * 0.15;
+    vec3 rainbow = 0.5 + 0.5 * cos(6.2831 * (diag + vec3(0.0, 0.33, 0.67)));
+
+    // soft round sun-flare drifting across the surface, no hard edges
+    vec2 flareCenter = vec2(0.5 + 0.5 * sin(uTime * 0.3), 0.5 + 0.5 * cos(uTime * 0.23));
+    float flare = pow(smoothstep(0.4, 0.0, distance(vUv, flareCenter)), 2.0);
+
+    vec3 holo = rainbow * fresnel * 0.12 + vec3(1.0) * flare * (0.25 + uBass * 0.35);
+    vec3 finalColor = texColor.rgb + holo;
+
+    gl_FragColor = vec4(finalColor, texColor.a);
+  }
+`;
 
 export default {
   audioCtx: null as AudioContext | null,
+  analyser: null as AnalyserNode | null,
+  freqData: null as Uint8Array<ArrayBuffer> | null,
+  audioEl: null as HTMLAudioElement | null,
+  audioSrc: tracklist[0].audioSrc, //default to first track in tracklist
+  audioImgSrc: tracklist[0].albumCover, //default to first track in tracklist
+  smoothedBass: 0, // eased bass level, avoids jittery cube movement
+  holoUniforms: null as null | { map: { value: THREE.Texture }; uTime: { value: number }; uBass: { value: number } },
+
+
   render() {
     return `
-      <div class="visualizer">
-        <div class="switch-container">
-          <label class="switch">
-            <input type="checkbox">
-            <span class="slider round"></span>
-          </label>
+      <div class="visualizer"></div>
+      <div class="track-select">
+        <select id="track-select" aria-label="Select track">
+          ${tracklist
+        .map(
+          (track, index) => `<option value="${index}">${track.title}</option>`
+        )
+        .join("")}
+        </select>
+      </div>
+      <div class="audio-player">
+        <div class="audio-controls">
+          <button id="play-btn" aria-label="Play">▶</button>
+          <button id="pause-btn" aria-label="Pause">⏸</button>
+          <button id="stop-btn" aria-label="Stop">⏹</button>
+          <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.2" aria-label="Volume">
         </div>
-
-        <audio id="audioPlayer" hidden controls>
-          <source src="/app/assets/girlEDM.mp3" type="audio/mpeg">
-        </audio>
-
-        <canvas id="oscilloscope" width="600" height="200"></canvas>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
       </div>
     `;
   },
 
   init() {
-    const audioPlayer = document.getElementById("audioPlayer") as HTMLAudioElement;
-    const switchInput = document.querySelector(".switch input") as HTMLInputElement;
-
-    this.initializeThreeAndAudio();
-
-    switchInput.addEventListener("change", async () => {
-      if (switchInput.checked) {
-
-        if (this.audioCtx?.state === "suspended") {
-          await this.audioCtx.resume();
-        }
-
-        await audioPlayer.play();
-
-      } else {
-        audioPlayer.pause();
-        audioPlayer.currentTime = 0;
-      }
-    });
+    this.initAudio();
+    this.initThree();
+    this.initPlayerControls();
   },
 
-  initializeThreeAndAudio() {
-    // ----------------------------------------------- THREE.JS INITIALIZATION
-    // Initialize Three.js scene, camera, renderer
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 0, 10);  // camera back a bit from origin
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-    // Add OrbitControls for camera rotation
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
-    controls.rotateSpeed = 0.5;
-    controls.enableZoom = false; // lock zoom for a more fixed view
+  playTrack(index: number) {
+    const track = tracklist[index];
+    if (!this.audioEl || !track) return;
 
-    // -----------------------------------------------SHADER MESH
-    const outerMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        time: { value: 0 },
-        audioLevel: { value: 0 },            // this will be updated each frame
-        distortion: { value: 1.0 },
-        color: { value: new THREE.Color(0xff4e42) }  // a reddish-orange base color
-      },
-      wireframe: true,
-      transparent: true,
-      vertexShader: `
-        uniform float time;
-        uniform float audioLevel;
-        uniform float distortion;
-        varying vec3 vNormal;
-        varying vec3 vPosition;
+    this.audioSrc = track.audioSrc;
+    this.audioImgSrc = track.albumCover;
 
-        // Ashima Arts simplex noise (https://github.com/ashima/webgl-noise)
-        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-        vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-        vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
-        vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+    this.audioEl.src = track.audioSrc;
+    this.audioEl.load();
+    this.audioCtx?.resume();
+    this.audioEl.play();
 
-        float snoise(vec3 v) {
-          const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0);
-          const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+    // swaps the cube texture to match the newly selected track's cover
+    if (this.holoUniforms) {
+      new THREE.TextureLoader().load(track.albumCover, (texture) => {
+        this.holoUniforms!.map.value = texture;
+      });
+    }
+  },
 
-          vec3 i  = floor(v + dot(v, C.yyy));
-          vec3 x0 = v - i + dot(i, C.xxx);
+  // sets up analyser node for bass-reactive animation
+  initAudio() {
+    const audioEl = new Audio(this.audioSrc);
+    audioEl.loop = true;
+    this.audioEl = audioEl;
 
-          vec3 g = step(x0.yzx, x0.xyz);
-          vec3 l = 1.0 - g;
-          vec3 i1 = min(g.xyz, l.zxy);
-          vec3 i2 = max(g.xyz, l.zxy);
-
-          vec3 x1 = x0 - i1 + C.xxx;
-          vec3 x2 = x0 - i2 + C.yyy;
-          vec3 x3 = x0 - D.yyy;
-
-          i = mod289(i);
-          vec4 p = permute(permute(permute(
-              i.z + vec4(0.0, i1.z, i2.z, 1.0))
-            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-
-          float n_ = 0.142857142857;
-          vec3 ns = n_ * D.wyz - D.xzx;
-
-          vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-
-          vec4 x_ = floor(j * ns.z);
-          vec4 y_ = floor(j - 7.0 * x_);
-
-          vec4 x = x_ * ns.x + ns.yyyy;
-          vec4 y = y_ * ns.x + ns.yyyy;
-          vec4 h = 1.0 - abs(x) - abs(y);
-
-          vec4 b0 = vec4(x.xy, y.xy);
-          vec4 b1 = vec4(x.zw, y.zw);
-
-          vec4 s0 = floor(b0) * 2.0 + 1.0;
-          vec4 s1 = floor(b1) * 2.0 + 1.0;
-          vec4 sh = -step(h, vec4(0.0));
-
-          vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
-          vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
-
-          vec3 p0 = vec3(a0.xy, h.x);
-          vec3 p1 = vec3(a0.zw, h.y);
-          vec3 p2 = vec3(a1.xy, h.z);
-          vec3 p3 = vec3(a1.zw, h.w);
-
-          vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
-          p0 *= norm.x;
-          p1 *= norm.y;
-          p2 *= norm.z;
-          p3 *= norm.w;
-
-          vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
-          m = m * m;
-          return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
-        }
-
-        void main() {
-          // Start with the original position
-          vec3 pos = position;
-          // Calculate procedural noise value for this vertex (using its position and time)
-          float noise = snoise(pos * 0.5 + vec3(0.0, 0.0, time * 0.3));
-          // Displace vertex along its normal
-          pos += normal * noise * distortion * (1.0 + audioLevel);
-
-          vNormal = normal;
-          vPosition = pos;
-
-          // Standard transformation
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 color;
-        uniform float audioLevel;
-        uniform float time;
-        varying vec3 vNormal;
-        varying vec3 vPosition;
-
-        void main() {
-          // Calculate fresnel (view-angle dependent) term
-          vec3 viewDir = normalize(cameraPosition - vPosition);
-          float fresnel = 1.0 - max(0.0, dot(viewDir, vNormal));
-          fresnel = pow(fresnel, 2.0 + audioLevel * 2.0);
-          // Make the fragment color brighter on edges (fresnel) and pulse it slightly with time
-          float pulse = 0.8 + 0.2 * sin(time * 2.0);
-          vec3 emissiveColor = color * fresnel * pulse * (1.0 + audioLevel * 0.8);
-          // Alpha fade out a bit when audio is high (to make spikes more ethereal)
-          float alpha = fresnel * (0.7 - audioLevel * 0.3);
-          gl_FragColor = vec4(emissiveColor, alpha);
-        }
-      `
-    });
-
-    const outerGeometry = new THREE.IcosahedronGeometry(3, 12);
-    const outerMesh = new THREE.Mesh(outerGeometry, outerMaterial);
-    scene.add(outerMesh);
-
-    // -----------------------------------------------AUDIO INITIALIZATION
-    this.audioCtx = new AudioContext();
-    const audioCtx = this.audioCtx;
+    const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+    const audioCtx: AudioContext = new AudioContextCtor();
+    const source = audioCtx.createMediaElementSource(audioEl);
     const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048;
-    const audio = document.getElementById("audioPlayer") as HTMLAudioElement;
-    const source = audioCtx.createMediaElementSource(audio);
+    analyser.fftSize = 256;
     source.connect(analyser);
     analyser.connect(audioCtx.destination);
 
-    // -----------------------------------------------ANIMATION LOOP
-    const frequencyData = new Uint8Array(analyser.frequencyBinCount);
-    const sensitivity = 1.0; // This can be adjusted via a UI slider
+    this.audioCtx = audioCtx;
+    this.analyser = analyser;
+    // ArrayBuffer (not SharedArrayBuffer) required to satisfy AnalyserNode typings
+    this.freqData = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+  },
+
+  // wires play/pause/stop buttons and a seekable/draggable progress bar
+  initPlayerControls() {
+    const audioEl = this.audioEl!;
+    const player = document.querySelector(".audio-player")!;
+    const playBtn = document.getElementById("play-btn")!;
+    const pauseBtn = document.getElementById("pause-btn")!;
+    const stopBtn = document.getElementById("stop-btn")!;
+    const progressFill = document.getElementById("progress-fill")!;
+    const volume = document.getElementById("volume-slider") as HTMLInputElement;
+
+    const trackSelect = document.getElementById("track-select") as HTMLSelectElement;
+
+    trackSelect.addEventListener("change", () => {
+      const index = Number(trackSelect.value);
+      this.playTrack(index);
+    });
+
+    playBtn.addEventListener("click", () => {
+      this.audioCtx?.resume();
+      audioEl.play();
+    });
+    pauseBtn.addEventListener("click", () => audioEl.pause());
+    stopBtn.addEventListener("click", () => {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+    });
+    audioEl.addEventListener("play", () =>
+      player.classList.add("is-playing")
+    );
+    audioEl.addEventListener("pause", () =>
+      player.classList.remove("is-playing")
+    );
+    audioEl.addEventListener("ended", () =>
+      player.classList.remove("is-playing")
+    );
+    audioEl.addEventListener("timeupdate", () => {
+      const pct = (audioEl.currentTime / audioEl.duration) * 100 || 0;
+      progressFill.style.width = `${pct}%`;
+    });
+    audioEl.volume = Number(volume.value);
+    volume.addEventListener("input", () => {
+      audioEl.volume = Number(volume.value);
+    });
+
+
+    // click-and-drag seeking on the progress bar
+    const seekFromEvent = (clientX: number) => {
+      const progressBar = document.querySelector(".progress-bar") as HTMLElement;
+      const rect = progressBar.getBoundingClientRect();
+      const pct = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+      if (audioEl.duration) audioEl.currentTime = pct * audioEl.duration;
+    };
+    const progressBar = document.querySelector(".progress-bar") as HTMLElement;
+    progressBar.addEventListener("mousedown", (e) => {
+      seekFromEvent(e.clientX);
+      const onMove = (ev: MouseEvent) => seekFromEvent(ev.clientX);
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+  },
+
+  initThreeElements(scene: THREE.Scene) {
+    const geometry = new THREE.BoxGeometry(8, 8, 8);
+
+    // 1x1 white placeholder keeps the mesh visible before the album texture loads
+    const placeholder = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    placeholder.needsUpdate = true;
+
+    const holoUniforms = {
+      map: { value: placeholder as THREE.Texture },
+      uTime: { value: 0 },
+      uBass: { value: 0 },
+    };
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: holoUniforms,
+      vertexShader: holoVertexShader,
+      fragmentShader: holoFragmentShader,
+    });
+
+    const cube = new THREE.Mesh(geometry, material);
+
+    cube.rotation.set(0.4, 0.2, 0);
+    scene.add(cube);
+
+    const loader = new THREE.TextureLoader();
+
+    loader.load(this.audioImgSrc, (texture) => {
+      holoUniforms.map.value = texture;
+    });
+
+    this.holoUniforms = holoUniforms;
+
+    const light = new THREE.PointLight(0xffffff, 5000);
+    light.position.set(-10, 15, 50);
+    scene.add(light);
+
+    return { cube, holoUniforms };
+  },
+
+  initThree() {
+    const WIDTH = window.innerWidth;
+    const HEIGHT = window.innerHeight;
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(WIDTH, HEIGHT);
+    // caps pixel ratio to avoid overloading the GPU on high-DPI mobile screens
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0xdddddd, 1);
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      70,
+      WIDTH / HEIGHT
+    );
+    camera.position.z = 50;
+    scene.add(camera);
+    const { cube, holoUniforms } = this.initThreeElements(scene);
+
+    // keeps canvas and camera aspect correct on mobile/orientation changes
+    window.addEventListener("resize", () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(w, h);
+    });
+
+    const analyser = this.analyser!;
+    const freqData = this.freqData!;
     const clock = new THREE.Clock();
 
-    animate();
+    const render = () => {
+      requestAnimationFrame(render);
+      analyser.getByteFrequencyData(freqData);
+      // bass = low-frequency bins average, the cube's main music input
+      const bassBins = freqData.slice(0, 8);
+      const bassAvg = bassBins.reduce((sum, v) => sum + v, 0) / bassBins.length;
+      const bassNorm = bassAvg / 255;
+      // lerp toward the live bass value so the pulse feels smooth, not jumpy
+      this.smoothedBass += (bassNorm - this.smoothedBass) * 0.8;
+      const pulse = 0.8 + this.smoothedBass * 1.5;
+      cube.scale.set(pulse, pulse, pulse);
 
-    function animate() {
-      requestAnimationFrame(animate);
+      cube.rotation.x += 0.01;
+      cube.rotation.y += 0.01;
 
-      // ... update Three.js controls, etc.
-      controls.update();
-
-      let audioLevel = 0;
-      if (analyser) {
-        analyser.getByteFrequencyData(frequencyData);
-        // Compute an average volume level from frequency data
-        let sum = 0;
-        for (let i = 0; i < frequencyData.length; i++) {
-          sum += frequencyData[i];
-        }
-        const average = sum / frequencyData.length;
-        audioLevel = average / 255;  // normalize to 0.0–1.0
-        // Apply a sensitivity scaling (from a UI slider) 
-        audioLevel *= (sensitivity / 5.0);
-        // Now audioLevel represents the intensity of the music (0 = silence, ~1 = very loud)
-      }
-
-      outerMaterial.uniforms.time.value = clock.getElapsedTime();
-      outerMaterial.uniforms.audioLevel.value = audioLevel;
+      // drives the rainbow flow and sun-flare sweep on the mesh shader
+      holoUniforms.uTime.value = clock.getElapsedTime();
+      holoUniforms.uBass.value = this.smoothedBass;
 
       renderer.render(scene, camera);
-    }
+    };
+
+    render();
   },
 };
