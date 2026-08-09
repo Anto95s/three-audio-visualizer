@@ -1,5 +1,3 @@
-Coming soon...
-
 Music visualizer built with TypeScript and Vite, using Three.js to render audio-reactive graphics from the Web Audio API analyser.
 
 What it does
