@@ -2,6 +2,7 @@ import "./style/style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { tracklist } from "../../utils/tracks";
+import LiquidBackground from "../LiquidBackground/LiquidBackground";
 
 // unlit shader: base texture + a holographic rainbow sweep and a moving sun-flare streak
 const holoVertexShader = `
@@ -60,15 +61,17 @@ export default {
 
   render() {
     return `
-      <div class="visualizer"></div>
+    ${LiquidBackground.render()}
+      <div class="visualizer cube-wrapper"></div>
       <div class="track-select">
-        <select id="track-select" aria-label="Select track">
-          ${tracklist
+      <select id="track-select" aria-label="Select track">
+        ${tracklist
         .map(
-          (track, index) => `<option value="${index}">${track.title}</option>`
+          (track, index) =>
+            `<option value="${index}">${track.title}</option>`
         )
         .join("")}
-        </select>
+      </select>
       </div>
       <div class="audio-player">
         <div class="audio-controls">
@@ -88,6 +91,7 @@ export default {
     this.initAudio();
     this.initThree();
     this.initPlayerControls();
+    LiquidBackground.init(true, this.analyser!, this.audioImgSrc);
   },
 
   playTrack(index: number) {
@@ -108,6 +112,8 @@ export default {
         this.holoUniforms!.map.value = texture;
       });
     }
+
+    LiquidBackground.setCoverColors(track.albumCover);
   },
 
   // sets up analyser node for bass-reactive animation
@@ -238,10 +244,11 @@ export default {
     const WIDTH = window.innerWidth;
     const HEIGHT = window.innerHeight;
     const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setClearColor(0xffffff, 1);
     renderer.setSize(WIDTH, HEIGHT);
     // caps pixel ratio to avoid overloading the GPU on high-DPI mobile screens
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0xdddddd, 1);
+    renderer.setClearColor(0x000000, 0);
     document.body.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
@@ -285,6 +292,8 @@ export default {
       holoUniforms.uTime.value = clock.getElapsedTime();
       holoUniforms.uBass.value = this.smoothedBass;
 
+      renderer.domElement.style.position = "absolute";
+      renderer.domElement.style.zIndex = "1";
       renderer.render(scene, camera);
     };
 

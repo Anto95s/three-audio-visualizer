@@ -1,5 +1,5 @@
 import "./style/style.css";
-import Visualizer from "../../components/visualizer/Visualizer";
+import Visualizer from "../../components/Visualizer/Visualizer";
 
 export default {
   render() {

@@ -1,10 +1,12 @@
-import girlEDMSrc from "../assets/girlEDM/girlEDM.mp3";
-import undoUSrc from "../assets/girlEDM/undoU.mp3";
-import girlEDMCover from "../assets/girlEDM/girlEDM.jpg";
-import summitSrc from "../assets/skrillex/summit.mp3";
-import skrillexCover from "../assets/skrillex/skrillex.jpg";
-import yearsSrc from "../assets/worlds/years.mp3";
-import worldsCover from "../assets/worlds/worlds.jpg";
+const girlEDMSrc = "/tracks/girlEDM/girlEDM.mp3";
+const undoUSrc = "/tracks/girlEDM/undoU.mp3";
+const girlEDMCover = "/tracks/girlEDM/girlEDM.jpg";
+
+const summitSrc = "/tracks/skrillex/summit.mp3";
+const skrillexCover = "/tracks/skrillex/skrillex.jpg";
+
+const yearsSrc = "/tracks/worlds/years.mp3";
+const worldsCover = "/tracks/worlds/worlds.jpg";
 
 export const tracklist = [
     {
@@ -26,6 +28,5 @@ export const tracklist = [
         title: "Years",
         albumCover: worldsCover,
         audioSrc: yearsSrc,
-    }
-
+    },
 ];

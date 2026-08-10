@@ -1,0 +1,43 @@
+.background-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+#background-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+#content {
+    mix-blend-mode: difference;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    font-size: 1.6rem;
+    justify-content: center;
+    align-items: center;
+    z-index: 2;
+}
+
+.txt-content {
+    border: 0.2rem solid white;
+    border-radius: 1rem;
+    padding: 0.98rem;
+}
+
+.background-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+}
