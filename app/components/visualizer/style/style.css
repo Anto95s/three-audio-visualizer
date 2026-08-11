@@ -1,114 +1,58 @@
-.cube-wrapper {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-}
-
-/* overlays audio controls on top of the 3d canvas */
-.audio-player {
+.visualizer-stage {
     position: fixed;
-    bottom: 32px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 320px;
-    padding: 12px 20px;
-    background: #1b1b1b;
-    border-radius: 999px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    z-index: 10;
-    font-family: sans-serif;
-}
-
-.audio-controls {
-    display: flex;
-    gap: 16px;
-}
-
-.audio-controls button {
-    background: none;
-    border: none;
-    color: #fff;
-    font-size: 18px;
-    cursor: pointer;
-    line-height: 1;
-    opacity: 0.6;
-    transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.audio-controls button:hover {
-    opacity: 1;
-}
-
-/* highlights the button matching current playback state */
-.audio-player.is-playing #play-btn,
-.audio-player:not(.is-playing) #pause-btn {
-    opacity: 0.3;
-}
-
-.audio-player.is-playing #pause-btn {
-    opacity: 1;
-    transform: scale(1.15);
-}
-
-.progress-bar {
-    width: 100%;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.25);
-    border-radius: 2px;
-    cursor: pointer;
-    /* extra vertical hit area makes dragging easier without resizing the bar */
-    padding: 6px 0;
-    background-clip: content-box;
-}
-
-.progress-fill {
-    height: 4px;
-    width: 0%;
-    background: #a855f7;
-    border-radius: 2px;
-    transition: width 0.1s linear;
+    inset: 0;
+    z-index: 1;
+    opacity: 0;
     pointer-events: none;
+    transition: opacity 0.5s ease;
 }
 
-#volume-slider {
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    accent-color: #a855f7;
+body.is-visualizing .visualizer-stage {
+    opacity: 1;
+    pointer-events: auto;
 }
 
-/* pill dropdown overlay, styled to match the audio player */
-.track-select {
+.visualizer-canvas {
+    position: absolute;
+    inset: 0;
+}
+
+.shape-toggle {
     position: fixed;
     top: 32px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 220px;
-    padding: 4px;
-    border-radius: 999px;
-    backdrop-filter: blur(6px);
+    right: 32px;
     z-index: 10;
-    font-family: sans-serif;
-}
-
-.track-select select {
-    width: 100%;
-    border: none;
-    color: #fff;
-    font-size: 14px;
-    padding: 8px 16px;
+    padding: 8px 18px;
     border-radius: 999px;
+    background: rgba(20, 20, 20, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    color: #fff;
+    font-size: 13px;
     cursor: pointer;
-    appearance: none;
-    text-align: center;
-    text-align-last: center;
 }
 
-.track-select select option {
-    background: #1b1b1b;
+.shape-toggle:hover {
+    background: rgba(30, 30, 30, 0.7);
+}
+
+.back-button {
+    position: fixed;
+    top: 32px;
+    left: 32px;
+    z-index: 10;
+    padding: 8px 18px;
+    border-radius: 999px;
+    background: rgba(20, 20, 20, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.back-button:hover {
+    background: rgba(30, 30, 30, 0.7);
 }

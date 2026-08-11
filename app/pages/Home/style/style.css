@@ -121,10 +121,3 @@ select:focus {
     background: #3b82f6;
     color: white;
 }
-
-.center-visualizer {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    /* height: 100vh; */
-}

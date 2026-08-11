@@ -1,32 +1,21 @@
-const girlEDMSrc = "/tracks/girlEDM/girlEDM.mp3";
-const undoUSrc = "/tracks/girlEDM/undoU.mp3";
-const girlEDMCover = "/tracks/girlEDM/girlEDM.jpg";
-
-const summitSrc = "/tracks/skrillex/summit.mp3";
-const skrillexCover = "/tracks/skrillex/skrillex.jpg";
-
-const yearsSrc = "/tracks/worlds/years.mp3";
-const worldsCover = "/tracks/worlds/worlds.jpg";
+const baneCover = "/tracks/bane/bane.jpeg";
+const elysiumCover = "/tracks/elysium/elysium.jpg";
+const moneyMouthCover = "/tracks/moneyMouth/moneyMusic.jpeg";
 
 export const tracklist = [
     {
-        title: "girl EDM",
-        albumCover: girlEDMCover,
-        audioSrc: girlEDMSrc,
+        title: "Money Mouth",
+        albumCover: moneyMouthCover,
+        audioSrc: "/tracks/moneyMouth/moneyMouth.mp3",
     },
     {
-        title: "Undo U",
-        albumCover: girlEDMCover,
-        audioSrc: undoUSrc,
+        title: "Bane",
+        albumCover: baneCover,
+        audioSrc: "/tracks/bane/bane.mp3",
     },
     {
-        title: "Summit",
-        albumCover: skrillexCover,
-        audioSrc: summitSrc,
-    },
-    {
-        title: "Years",
-        albumCover: worldsCover,
-        audioSrc: yearsSrc,
-    },
+        title: "Elysium",
+        albumCover: elysiumCover,
+        audioSrc: "/tracks/elysium/elysium.mp3",
+    }
 ];

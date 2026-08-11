@@ -1,15 +1,16 @@
 import "./style/style.css";
+import MusicSelector from "../../components/MusicSelector/MusicSelector";
 import Visualizer from "../../components/Visualizer/Visualizer";
 
 export default {
   render() {
     return `
-    <div class="center-visualizer">
       ${Visualizer.render()}
-    </div>
-  `;
+      ${MusicSelector.render()}
+    `;
   },
   init() {
     Visualizer.init();
+    MusicSelector.init();
   }
 }
