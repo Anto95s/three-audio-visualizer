@@ -17,6 +17,4 @@ npm run dev
 
 Try it out here: https://music-visualizer-mocha.vercel.app/
 
-<img width="1440" height="774" alt="Screenshot 2026-08-11 alle 15 33 46" src="https://github.com/user-attachments/assets/6d07d847-846a-4f8a-a1d2-7258f92c5e07" />
-
-<img width="1440" height="775" alt="Screenshot 2026-08-11 alle 15 33 23" src="https://github.com/user-attachments/assets/60789fcd-6838-417a-8544-51e27c08c843" />
+<img width="1205" height="648" alt="Screenshot 2026-08-11 alle 15 33 23" src="https://github.com/user-attachments/assets/60789fcd-6838-417a-8544-51e27c08c843" />
